@@ -16,6 +16,9 @@
 #include "file.h"
 #include "fcntl.h"
 
+struct spinlock readcounterlock;
+uint     readcounter;
+
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -52,6 +55,14 @@ fdalloc(struct file *f)
   return -1;
 }
 
+void
+countread()
+{
+  acquire(&readcounterlock);
+  readcounter++;
+  release(&readcounterlock);
+}
+
 uint64
 sys_dup(void)
 {
@@ -72,6 +83,8 @@ sys_read(void)
   struct file *f;
   int n;
   uint64 p;
+
+  countread();
 
   if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argaddr(1, &p) < 0)
     return -1;
@@ -393,7 +406,7 @@ sys_chdir(void)
   char path[MAXPATH];
   struct inode *ip;
   struct proc *p = myproc();
-  
+
   begin_op();
   if(argstr(0, path, MAXPATH) < 0 || (ip = namei(path)) == 0){
     end_op();
@@ -483,4 +496,10 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+uint64
+sys_getreadcount(void)
+{
+  return readcounter;
 }
